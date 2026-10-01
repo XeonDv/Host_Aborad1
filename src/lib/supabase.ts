@@ -1,0 +1,93 @@
+import { createClient } from '@supabase/supabase-js';
+
+const url = import.meta.env.VITE_SUPABASE_URL as string;
+const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
+
+if (!url || !anonKey) {
+  throw new Error('Missing Supabase env vars. Check .env for VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.');
+}
+
+export const supabase = createClient(url, anonKey, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true,
+  },
+});
+
+export type UserType = 'student' | 'host' | 'admin';
+
+export interface Profile {
+  id: string;
+  user_type: UserType;
+  full_name: string;
+  phone: string;
+  country: string;
+  city: string;
+  bio: string;
+  avatar_url: string;
+  registration_paid: boolean;
+  registration_fee_paid_at: string | null;
+  created_at: string;
+}
+
+export interface Listing {
+  id: string;
+  host_id: string;
+  title: string;
+  description: string;
+  city: string;
+  neighbourhood: string;
+  price_per_month: number;
+  room_type: 'Private room' | 'Shared room' | 'Studio';
+  meals_included: boolean;
+  amenities: string[];
+  photo_urls: string[];
+  available_from: string | null;
+  available_to: string | null;
+  max_stay_months: number;
+  created_at: string;
+}
+
+export interface Room {
+  id: string;
+  listing_id: string;
+  title: string;
+  description: string;
+  room_type: 'Private room' | 'Shared room' | 'Studio';
+  beds: number;
+  price_per_month: number;
+  photo_urls: string[];
+  available_from: string | null;
+  available_to: string | null;
+  max_stay_months: number;
+  created_at: string;
+}
+
+export interface Booking {
+  id: string;
+  student_id: string;
+  listing_id: string;
+  room_id: string | null;
+  check_in: string;
+  check_out: string;
+  months: number;
+  total_amount: number;
+  status: 'pending' | 'confirmed' | 'cancelled' | 'completed';
+  stripe_session_id: string;
+  created_at: string;
+}
+
+export interface ListingWithHost extends Listing {
+  host: Pick<Profile, 'id' | 'full_name' | 'avatar_url' | 'city' | 'country'> | null;
+}
+
+export interface ListingWithRooms extends Listing {
+  rooms: Room[];
+}
+
+export interface BookingWithDetails extends Booking {
+  listing: Pick<Listing, 'id' | 'title' | 'city' | 'price_per_month' | 'photo_urls'> | null;
+  room: Pick<Room, 'id' | 'title' | 'room_type' | 'beds' | 'price_per_month'> | null;
+  student: Pick<Profile, 'id' | 'full_name' | 'avatar_url' | 'country'> | null;
+}
