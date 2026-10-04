@@ -5,7 +5,6 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { useRouter } from '@/lib/router';
-import { supabase } from '@/lib/supabase';
 import { Button, ErrorBanner, Spinner } from '@/components/ui';
 import { formatCAD } from '@/lib/format';
 
@@ -25,7 +24,7 @@ const STEPS = [
 ];
 
 export function RegistrationPage() {
-  const { user, profile, refreshProfile } = useAuth();
+  const { user, profile, updateProfile } = useAuth();
   const { navigate } = useRouter();
   const [paying, setPaying] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -52,19 +51,15 @@ export function RegistrationPage() {
     setPaying(true);
     // NOTE: Real Stripe Checkout integration will replace this once Stripe is configured.
     // For now we mark the fee as paid so the student can proceed through the full flow.
-    const { error } = await supabase
-      .from('profiles')
-      .update({
-        registration_paid: true,
-        registration_fee_paid_at: new Date().toISOString(),
-      })
-      .eq('id', user.id);
+    const { error } = await updateProfile({
+      registration_paid: true,
+      registration_fee_paid_at: new Date().toISOString(),
+    });
     setPaying(false);
     if (error) {
       setError('Something went wrong recording your payment. Please try again.');
       return;
     }
-    await refreshProfile();
     navigate('/listings');
   };
 
