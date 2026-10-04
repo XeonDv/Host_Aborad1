@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Home, Menu, X, LayoutDashboard, LogOut, Compass, ShieldCheck } from 'lucide-react';
+import { Menu, X, LayoutDashboard, LogOut, Compass, ShieldCheck } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { useRouter } from '@/lib/router';
 
@@ -47,11 +47,11 @@ export function Navbar() {
     >
       <nav className="max-w-7xl mx-auto px-5 lg:px-8 h-16 flex items-center justify-between">
         <button onClick={() => go('/')} className="flex items-center gap-2.5 group">
-          <span className="w-9 h-9 rounded-xl bg-brand-700 flex items-center justify-center shadow-sm group-hover:scale-105 transition-transform">
-            <Home className="w-5 h-5 text-white" strokeWidth={2.2} />
+          <span className="w-10 h-10 rounded-xl bg-white flex items-center justify-center overflow-hidden shadow-sm ring-1 ring-brand-100 group-hover:scale-105 transition-transform">
+            <img src="/Logo_Host_Abroad_Inc..png" alt="Host Abroad Inc." className="w-full h-full object-cover" />
           </span>
           <span className={`font-extrabold text-lg tracking-tight ${scrolled || !isLanding ? 'text-sand-900' : 'text-sand-900'}`}>
-            HostAbroad<span className="text-brand-600">.ca</span>
+            Host<span className="text-brand-600">Abroad</span><span className="text-sand-700">.ca</span>
           </span>
         </button>
 
@@ -173,10 +173,10 @@ export function Footer() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-10">
           <div className="col-span-2 md:col-span-1">
             <div className="flex items-center gap-2.5 mb-4">
-              <span className="w-9 h-9 rounded-xl bg-brand-600 flex items-center justify-center">
-                <Home className="w-5 h-5 text-white" strokeWidth={2.2} />
+              <span className="w-10 h-10 rounded-xl bg-white flex items-center justify-center overflow-hidden shadow-sm">
+                <img src="/Logo_Host_Abroad_Inc..png" alt="Host Abroad Inc." className="w-full h-full object-cover" />
               </span>
-              <span className="font-extrabold text-lg text-white">HostAbroad<span className="text-brand-400">.ca</span></span>
+              <span className="font-extrabold text-lg text-white">Host<span className="text-brand-400">Abroad</span><span className="text-sand-300">.ca</span></span>
             </div>
             <p className="text-sm text-sand-400 leading-relaxed max-w-xs">
               Connecting international students with welcoming Canadian host families since 2024.
