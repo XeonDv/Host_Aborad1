@@ -37,6 +37,13 @@ export function clearStoredSession(): void {
   localStorage.removeItem(SESSION_KEY);
 }
 
+const API_BASE = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '') || '';
+
+function apiUrl(path: string): string {
+  if (API_BASE) return `${API_BASE}${path}`;
+  return path;
+}
+
 export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
   const session = getStoredSession();
   const headers = new Headers(init.headers);
@@ -45,7 +52,7 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
 
   let response: Response;
   try {
-    response = await fetch(path, { ...init, headers, credentials: 'include' });
+    response = await fetch(apiUrl(path), { ...init, headers, credentials: 'include' });
   } catch {
     throw new Error('Unable to connect to the server. Please try again.');
   }
