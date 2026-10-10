@@ -10,7 +10,7 @@
     "build": "vite build && node scripts/build-server.mjs",
     "build:client": "vite build",
     "build:server": "node scripts/build-server.mjs",
-    "start": "node scripts/db-migrate.mjs; node dist/server.js",
+    "start": "node dist/server.js",
     "lint": "eslint .",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.app.json",

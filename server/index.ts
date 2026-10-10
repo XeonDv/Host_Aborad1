@@ -10,7 +10,8 @@ import bookingRoutes from './routes/bookings';
 import adminRoutes from './routes/admin';
 import paymentRoutes, { stripeWebhook } from './routes/payments';
 import { assertAuthConfigured } from './auth';
-import { testConnection } from './db';
+import pool, { testConnection } from './db';
+import { runMigrations } from '../database/migrate.mjs';
 
 assertAuthConfigured(); // falla al arrancar si falta JWT_SECRET
 
@@ -76,6 +77,17 @@ app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
   res.status(500).json({ error: 'Something went wrong. Please try again.' });
 });
 
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+async function main() {
+  // Deja la base lista (solo agrega tablas/columnas que falten). Si falla, el sitio
+  // arranca igual y el motivo queda en los logs; /api/health mostrará si hay conexión.
+  try {
+    await runMigrations(pool);
+  } catch (err) {
+    console.error('Migration failed (the server will start anyway):', err);
+  }
+  app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+  });
+}
+
+main();
