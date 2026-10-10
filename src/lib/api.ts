@@ -1,4 +1,7 @@
-import type { Profile, UserType } from '@/lib/supabase';
+import type {
+  AdminBooking, AdminListing, AdminProfile, Booking, BookingWithRelations, Listing,
+  ListingWithCount, Profile, PublicHost, Room, UserType,
+} from '@/lib/types';
 
 export interface ApiUser {
   id: string;
@@ -109,5 +112,108 @@ export function updateProfileRequest(userId: string, updates: Partial<Profile>):
   return apiFetch<Profile>(`/api/profiles/${userId}`, {
     method: 'PATCH',
     body: JSON.stringify(updates),
+  });
+}
+
+// ---------- Homestays ----------
+
+export interface ListingFilters {
+  city?: string;
+  roomType?: string;
+  mealsOnly?: boolean;
+  maxPrice?: number | '';
+}
+
+export function fetchListings(filters: ListingFilters = {}): Promise<ListingWithCount[]> {
+  const params = new URLSearchParams();
+  if (filters.city) params.set('city', filters.city);
+  if (filters.roomType) params.set('room_type', filters.roomType);
+  if (filters.mealsOnly) params.set('meals', 'true');
+  if (filters.maxPrice !== undefined && filters.maxPrice !== '') params.set('max_price', String(filters.maxPrice));
+  const qs = params.toString();
+  return apiFetch<ListingWithCount[]>(`/api/listings${qs ? `?${qs}` : ''}`);
+}
+
+export function fetchListingDetail(id: string): Promise<{ listing: Listing; host: PublicHost | null; rooms: Room[] }> {
+  return apiFetch(`/api/listings/${encodeURIComponent(id)}`);
+}
+
+export function fetchMyListings(): Promise<{ listings: Listing[]; rooms: Room[] }> {
+  return apiFetch('/api/listings/mine');
+}
+
+export interface ListingPayload {
+  title: string;
+  description: string;
+  city: string;
+  neighbourhood: string;
+  meals_included: boolean;
+  amenities: string[];
+  photo_urls: string[];
+  rooms: {
+    id?: string;
+    title: string;
+    description: string;
+    room_type: Room['room_type'];
+    beds: number;
+    price_per_month: number;
+    photo_urls: string[];
+    available_from: string | null;
+    available_to: string | null;
+    max_stay_months: number;
+  }[];
+}
+
+export function saveListing(listingId: string | undefined, payload: ListingPayload): Promise<{ id: string }> {
+  return apiFetch<{ id: string }>(listingId ? `/api/listings/${encodeURIComponent(listingId)}` : '/api/listings', {
+    method: listingId ? 'PUT' : 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deleteListing(listingId: string): Promise<null> {
+  return apiFetch<null>(`/api/listings/${encodeURIComponent(listingId)}`, { method: 'DELETE' });
+}
+
+// ---------- Reservas ----------
+
+export function fetchBookings(): Promise<BookingWithRelations[]> {
+  return apiFetch<BookingWithRelations[]>('/api/bookings');
+}
+
+export function createBooking(input: {
+  listing_id: string;
+  room_id: string;
+  check_in: string;
+  check_out: string;
+}): Promise<Booking> {
+  return apiFetch<Booking>('/api/bookings', { method: 'POST', body: JSON.stringify(input) });
+}
+
+export function updateBookingStatus(bookingId: string, status: Booking['status']): Promise<{ id: string; status: string }> {
+  return apiFetch(`/api/bookings/${encodeURIComponent(bookingId)}/status`, {
+    method: 'PATCH',
+    body: JSON.stringify({ status }),
+  });
+}
+
+// ---------- Admin ----------
+
+export const adminApi = {
+  profiles: () => apiFetch<AdminProfile[]>('/api/admin/profiles'),
+  listings: () => apiFetch<AdminListing[]>('/api/admin/listings'),
+  bookings: () => apiFetch<AdminBooking[]>('/api/admin/bookings'),
+};
+
+// ---------- Pago de la cuota de registro ----------
+
+export function startRegistrationCheckout(): Promise<{ url?: string; alreadyPaid?: boolean }> {
+  return apiFetch('/api/payments/registration/checkout', { method: 'POST' });
+}
+
+export function confirmRegistrationPayment(sessionId: string): Promise<{ paid: boolean }> {
+  return apiFetch('/api/payments/registration/confirm', {
+    method: 'POST',
+    body: JSON.stringify({ session_id: sessionId }),
   });
 }

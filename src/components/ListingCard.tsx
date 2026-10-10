@@ -1,5 +1,5 @@
 import { MapPin, Star, UtensilsCrossed, BedDouble, Wifi, Home as HomeIcon } from 'lucide-react';
-import type { Listing } from '@/lib/supabase';
+import type { Listing } from '@/lib/types';
 import { useRouter } from '@/lib/router';
 import { formatCAD } from '@/lib/format';
 

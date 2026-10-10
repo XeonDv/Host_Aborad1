@@ -10,6 +10,16 @@ const pool = mysql.createPool({
   connectionLimit: 10,
   queueLimit: 0,
   enableKeepAlive: true,
+  // DATE/DATETIME llegan como texto (sin sorpresas de zona horaria) y
+  // DECIMAL como número, para que el JSON sea el que espera el frontend.
+  dateStrings: true,
+  decimalNumbers: true,
+  timezone: 'Z',
+});
+
+// Todas las fechas se guardan en UTC, sin importar la zona del servidor.
+pool.pool.on('connection', (connection) => {
+  connection.query("SET time_zone = '+00:00'");
 });
 
 export async function testConnection(): Promise<void> {

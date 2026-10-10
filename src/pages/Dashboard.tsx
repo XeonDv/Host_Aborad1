@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   Plus, Edit3, MapPin, Calendar, Trash2, Home as HomeIcon, GraduationCap,
   CheckCircle2, Clock, XCircle, ArrowRight, Save, LayoutDashboard, User as UserIcon,
   BedDouble,
 } from 'lucide-react';
-import { supabase, type Listing, type Room, type Booking, type Profile } from '@/lib/supabase';
+import { fetchBookings, fetchMyListings, updateBookingStatus } from '@/lib/api';
+import type { Listing, Room, Booking, BookingWithRelations, Profile } from '@/lib/types';
 import { useAuth } from '@/lib/auth';
 import { useRouter } from '@/lib/router';
 import { Button, EmptyState, ErrorBanner, Spinner } from '@/components/ui';
@@ -13,15 +14,34 @@ import { formatCAD, formatDate } from '@/lib/format';
 type Tab = 'overview' | 'listings' | 'bookings' | 'profile';
 
 export function DashboardPage() {
-  const { user, profile, loading, refreshProfile, signOut } = useAuth();
+  const { user, profile, loading, signOut } = useAuth();
   const { navigate } = useRouter();
   const [tab, setTab] = useState<Tab>('overview');
   const [listings, setListings] = useState<Listing[]>([]);
   const [rooms, setRooms] = useState<Room[]>([]);
-  const [bookings, setBookings] = useState<(Booking & { listing?: Listing; student?: Profile })[]>([]);
+  const [bookings, setBookings] = useState<BookingWithRelations[]>([]);
   const [dataLoading, setDataLoading] = useState(true);
 
   const isHost = profile?.user_type === 'host';
+
+  const userId = user?.id;
+  const loadData = useCallback(async () => {
+    if (!userId) return;
+    setDataLoading(true);
+    try {
+      if (isHost) {
+        const [mine, bks] = await Promise.all([fetchMyListings(), fetchBookings()]);
+        setListings(mine.listings);
+        setRooms(mine.rooms);
+        setBookings(bks);
+      } else {
+        setBookings(await fetchBookings());
+      }
+    } catch (err) {
+      console.error(err);
+    }
+    setDataLoading(false);
+  }, [userId, isHost]);
 
   useEffect(() => {
     if (loading) return;
@@ -29,31 +49,8 @@ export function DashboardPage() {
       navigate('/signin');
       return;
     }
-    (async () => {
-      setDataLoading(true);
-      if (isHost) {
-        const { data: l } = await supabase.from('listings').select('*').eq('host_id', user.id).order('created_at', { ascending: false });
-        setListings((l as Listing[]) ?? []);
-        if (l && l.length > 0) {
-          const { data: r } = await supabase.from('rooms').select('*').in('listing_id', l.map((x) => x.id)).order('created_at', { ascending: true });
-          setRooms((r as Room[]) ?? []);
-        }
-        const { data: b } = await supabase
-          .from('bookings')
-          .select('*, listing:listings(*), student:profiles(*)')
-          .order('created_at', { ascending: false });
-        setBookings((b as (Booking & { listing: Listing; student: Profile })[]) ?? []);
-      } else {
-        const { data: b } = await supabase
-          .from('bookings')
-          .select('*, listing:listings(*)')
-          .eq('student_id', user.id)
-          .order('created_at', { ascending: false });
-        setBookings((b as (Booking & { listing: Listing })[]) ?? []);
-      }
-      setDataLoading(false);
-    })();
-  }, [user, profile, loading, isHost, navigate]);
+    loadData();
+  }, [user, loading, navigate, loadData]);
 
   if (loading) {
     return <div className="pt-16 min-h-screen flex items-center justify-center"><Spinner className="w-8 h-8" /></div>;
@@ -134,10 +131,10 @@ export function DashboardPage() {
             <ListingsTab listings={listings} rooms={rooms} loading={dataLoading} navigate={navigate} />
           )}
           {tab === 'bookings' && (
-            <BookingsTab bookings={bookings} isHost={isHost} loading={dataLoading} navigate={navigate} userId={user.id} onUpdate={() => setTab('bookings')} registrationPaid={profile.registration_paid} />
+            <BookingsTab bookings={bookings} isHost={isHost} loading={dataLoading} navigate={navigate} userId={user.id} onUpdate={loadData} registrationPaid={profile.registration_paid} />
           )}
           {tab === 'profile' && (
-            <ProfileTab profile={profile} onSave={refreshProfile} signOut={signOut} navigate={navigate} />
+            <ProfileTab profile={profile} signOut={signOut} navigate={navigate} />
           )}
         </div>
       </div>
@@ -163,7 +160,7 @@ function Overview({ isHost, listings, rooms, bookings, pendingCount, confirmedCo
   isHost: boolean;
   listings: Listing[];
   rooms: Room[];
-  bookings: (Booking & { listing?: Listing; student?: Profile })[];
+  bookings: BookingWithRelations[];
   pendingCount: number;
   confirmedCount: number;
   totalEarnings: number;
@@ -329,12 +326,12 @@ function ListingsTab({ listings, rooms, loading, navigate }: { listings: Listing
 }
 
 function BookingsTab({ bookings, isHost, loading, navigate, userId, onUpdate, registrationPaid }: {
-  bookings: (Booking & { listing?: Listing; student?: Profile })[];
+  bookings: BookingWithRelations[];
   isHost: boolean;
   loading: boolean;
   navigate: (to: string) => void;
   userId: string;
-  onUpdate: () => void;
+  onUpdate: () => Promise<void> | void;
   registrationPaid: boolean;
 }) {
   const [updating, setUpdating] = useState<string | null>(null);
@@ -343,10 +340,15 @@ function BookingsTab({ bookings, isHost, loading, navigate, userId, onUpdate, re
   const updateStatus = async (bookingId: string, status: Booking['status']) => {
     setUpdating(bookingId);
     setError(null);
-    const { error } = await supabase.from('bookings').update({ status }).eq('id', bookingId);
+    try {
+      await updateBookingStatus(bookingId, status);
+    } catch (err) {
+      setUpdating(null);
+      setError(err instanceof Error ? err.message : 'Could not update this booking.');
+      return;
+    }
     setUpdating(null);
-    if (error) { setError(error.message); return; }
-    onUpdate();
+    await onUpdate();
   };
 
   if (loading) return <div className="py-12 flex justify-center"><Spinner className="w-7 h-7" /></div>;
@@ -414,12 +416,12 @@ function BookingsTab({ bookings, isHost, loading, navigate, userId, onUpdate, re
   );
 }
 
-function ProfileTab({ profile, onSave, signOut, navigate }: {
+function ProfileTab({ profile, signOut, navigate }: {
   profile: Profile;
-  onSave: () => Promise<void>;
   signOut: () => Promise<void>;
   navigate: (to: string) => void;
 }) {
+  const { updateProfile } = useAuth();
   const [fullName, setFullName] = useState(profile.full_name);
   const [phone, setPhone] = useState(profile.phone);
   const [country, setCountry] = useState(profile.country);
@@ -434,13 +436,9 @@ function ProfileTab({ profile, onSave, signOut, navigate }: {
     setSaving(true);
     setError(null);
     setSaved(false);
-    const { error } = await supabase
-      .from('profiles')
-      .update({ full_name: fullName, phone, country, city, bio, avatar_url: avatarUrl })
-      .eq('id', profile.id);
+    const { error } = await updateProfile({ full_name: fullName, phone, country, city, bio, avatar_url: avatarUrl });
     setSaving(false);
-    if (error) { setError(error.message); return; }
-    await onSave();
+    if (error) { setError(error); return; }
     setSaved(true);
     setTimeout(() => setSaved(false), 2500);
   };

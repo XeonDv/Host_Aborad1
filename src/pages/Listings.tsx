@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Search, SlidersHorizontal, MapPin, X } from 'lucide-react';
-import { supabase, type Listing, type Room } from '@/lib/supabase';
+import { fetchListings } from '@/lib/api';
+import type { Listing } from '@/lib/types';
 import { useRouter } from '@/lib/router';
 import { useAuth } from '@/lib/auth';
 import { ListingCard } from '@/components/ListingCard';
@@ -29,6 +30,34 @@ export function ListingsPage() {
     if (cityParam) setCity(cityParam);
   }, [path]);
 
+  const userId = user?.id;
+  useEffect(() => {
+    if (authLoading || !userId) return;
+    let active = true;
+    setLoading(true);
+    fetchListings({ city, roomType, mealsOnly, maxPrice })
+      .then((ls) => {
+        if (!active) return;
+        setListings(ls);
+        setRoomCounts(Object.fromEntries(ls.map((l) => [l.id, l.room_count])));
+      })
+      .catch((err) => console.error(err))
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [authLoading, userId, city, roomType, maxPrice, mealsOnly]);
+
+  const filtered = useMemo(() => {
+    if (!search.trim()) return listings;
+    const q = search.toLowerCase();
+    return listings.filter(
+      (l) =>
+        l.title.toLowerCase().includes(q) ||
+        l.city.toLowerCase().includes(q) ||
+        l.neighbourhood?.toLowerCase().includes(q) ||
+        l.description.toLowerCase().includes(q),
+    );
+  }, [listings, search]);
+
   if (authLoading) {
     return <div className="pt-16 min-h-screen flex items-center justify-center"><Spinner className="w-8 h-8" /></div>;
   }
@@ -42,53 +71,6 @@ export function ListingsPage() {
     navigate('/register');
     return null;
   }
-
-  useEffect(() => {
-    let query = supabase.from('listings').select('*').order('created_at', { ascending: false });
-    if (city) query = query.eq('city', city);
-    if (roomType) query = query.eq('room_type', roomType);
-    if (mealsOnly) query = query.eq('meals_included', true);
-    if (maxPrice !== '') query = query.lte('price_per_month', Number(maxPrice));
-
-    setLoading(true);
-    query.then(({ data, error }) => {
-      if (error) {
-        console.error(error);
-        setLoading(false);
-        return;
-      }
-      const ls = (data as Listing[]) ?? [];
-      setListings(ls);
-      if (ls.length > 0) {
-        supabase
-          .from('rooms')
-          .select('listing_id')
-          .in('listing_id', ls.map((l) => l.id))
-          .then(({ data: rd }) => {
-            const counts: Record<string, number> = {};
-            for (const r of (rd as Pick<Room, 'listing_id'>[]) ?? []) {
-              counts[r.listing_id] = (counts[r.listing_id] ?? 0) + 1;
-            }
-            setRoomCounts(counts);
-            setLoading(false);
-          });
-      } else {
-        setLoading(false);
-      }
-    });
-  }, [city, roomType, maxPrice, mealsOnly]);
-
-  const filtered = useMemo(() => {
-    if (!search.trim()) return listings;
-    const q = search.toLowerCase();
-    return listings.filter(
-      (l) =>
-        l.title.toLowerCase().includes(q) ||
-        l.city.toLowerCase().includes(q) ||
-        l.neighbourhood?.toLowerCase().includes(q) ||
-        l.description.toLowerCase().includes(q),
-    );
-  }, [listings, search]);
 
   const clearFilters = () => {
     setCity('');

@@ -3,7 +3,8 @@ import {
   MapPin, Star, ShieldCheck, UtensilsCrossed, BedDouble, Wifi, ArrowLeft,
   ArrowRight, Calendar, CheckCircle2, MessageCircle, Home as HomeIcon,
 } from 'lucide-react';
-import { supabase, type Listing, type Room, type Profile, type Booking } from '@/lib/supabase';
+import { createBooking, fetchListingDetail } from '@/lib/api';
+import type { Listing, Room, PublicHost, Booking } from '@/lib/types';
 import { useRouter } from '@/lib/router';
 import { useAuth } from '@/lib/auth';
 import { Badge, Button, ErrorBanner, Spinner } from '@/components/ui';
@@ -23,7 +24,7 @@ export function ListingDetailPage({ id }: { id: string }) {
   const { user, profile } = useAuth();
   const [listing, setListing] = useState<Listing | null>(null);
   const [rooms, setRooms] = useState<Room[]>([]);
-  const [host, setHost] = useState<Profile | null>(null);
+  const [host, setHost] = useState<PublicHost | null>(null);
   const [loading, setLoading] = useState(true);
   const [activePhoto, setActivePhoto] = useState(0);
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
@@ -35,35 +36,22 @@ export function ListingDetailPage({ id }: { id: string }) {
   const [bookingSuccess, setBookingSuccess] = useState(false);
 
   useEffect(() => {
+    let active = true;
     (async () => {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('listings')
-        .select('*')
-        .eq('id', id)
-        .maybeSingle();
-      if (error || !data) {
-        setLoading(false);
-        return;
+      try {
+        const detail = await fetchListingDetail(id);
+        if (!active) return;
+        setListing(detail.listing);
+        setHost(detail.host);
+        setRooms(detail.rooms);
+        if (detail.rooms.length > 0) setSelectedRoom(detail.rooms[0]);
+      } catch (err) {
+        console.error(err);
       }
-      const l = data as Listing;
-      setListing(l);
-      const { data: hostData } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', l.host_id)
-        .maybeSingle();
-      setHost(hostData as Profile | null);
-      const { data: roomData } = await supabase
-        .from('rooms')
-        .select('*')
-        .eq('listing_id', id)
-        .order('created_at', { ascending: true });
-      const rs = (roomData as Room[]) ?? [];
-      setRooms(rs);
-      if (rs.length > 0) setSelectedRoom(rs[0]);
-      setLoading(false);
+      if (active) setLoading(false);
     })();
+    return () => { active = false; };
   }, [id]);
 
   const months = checkIn && checkOut ? monthsBetween(checkIn, checkOut) : 0;
@@ -96,26 +84,21 @@ export function ListingDetailPage({ id }: { id: string }) {
       return;
     }
     setSubmitting(true);
-    const { data, error } = await supabase
-      .from('bookings')
-      .insert({
-        student_id: user.id,
+    let created: Booking;
+    try {
+      created = await createBooking({
         listing_id: listing!.id,
         room_id: selectedRoom.id,
         check_in: checkIn,
         check_out: checkOut,
-        months,
-        total_amount: total,
-        status: 'pending',
-      })
-      .select()
-      .single();
-    setSubmitting(false);
-    if (error) {
-      setBookingError(error.message);
+      });
+    } catch (err) {
+      setSubmitting(false);
+      setBookingError(err instanceof Error ? err.message : 'Could not create your booking request.');
       return;
     }
-    setBooking(data as Booking);
+    setSubmitting(false);
+    setBooking(created);
     setBookingSuccess(true);
   };
 
