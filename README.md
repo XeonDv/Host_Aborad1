@@ -39,7 +39,7 @@ Requiere un plan con **Node.js Web Apps** (Business, Cloud o VPS). El hosting co
 1. hPanel → Sitios web → Agregar sitio web → **Aplicación web Node.js**, conectada a este repositorio de GitHub.
 2. Versión de Node: 20 o 22. Build: `npm install && npm run build`. Start: `npm start`.
 3. Variables de entorno: las de `.env.example` (`DB_HOST` suele ser `localhost` cuando la base está en la misma cuenta).
-4. Una vez desplegado, abre una terminal SSH en la carpeta de la app y corre `npm run db:migrate`.
+4. No hace falta correr la migración a mano: `npm start` aplica `database/schema.sql` en cada arranque (solo crea lo que falte, nunca borra datos).
 5. Comprueba que `https://hostabroad.ca/api/health` responda `{"status":"ok","database":"connected"}`.
 
 ### Stripe
