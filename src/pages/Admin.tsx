@@ -3,48 +3,12 @@ import {
   Users, Home as HomeIcon, Calendar, DollarSign, ShieldCheck, Search,
   GraduationCap, MapPin, Clock, CheckCircle2, XCircle,
 } from 'lucide-react';
-import { supabase, type Profile } from '@/lib/supabase';
+import { adminApi } from '@/lib/api';
+import type { AdminBooking, AdminListing, AdminProfile as Profile } from '@/lib/types';
 import { useAuth } from '@/lib/auth';
 import { useRouter } from '@/lib/router';
 import { Button, Spinner, ErrorBanner } from '@/components/ui';
 import { formatCAD, formatDate } from '@/lib/format';
-
-interface AdminListing {
-  id: string;
-  host_id: string;
-  title: string;
-  description: string;
-  city: string;
-  neighbourhood: string;
-  price_per_month: number;
-  room_type: string;
-  meals_included: boolean;
-  amenities: string[];
-  photo_urls: string[];
-  available_from: string | null;
-  available_to: string | null;
-  max_stay_months: number;
-  created_at: string;
-  host_name: string;
-  host_email: string;
-}
-
-interface AdminBooking {
-  id: string;
-  student_id: string;
-  listing_id: string;
-  check_in: string;
-  check_out: string;
-  months: number;
-  total_amount: number;
-  status: string;
-  stripe_session_id: string;
-  created_at: string;
-  listing_title: string;
-  listing_city: string;
-  student_name: string;
-  student_email: string;
-}
 
 type AdminTab = 'overview' | 'students' | 'hosts' | 'listings' | 'bookings';
 
@@ -68,17 +32,18 @@ export function AdminPage() {
     (async () => {
       setDataLoading(true);
       setError(null);
-      const [profRes, listRes, bookRes] = await Promise.all([
-        supabase.rpc('admin_read_profiles'),
-        supabase.rpc('admin_read_listings'),
-        supabase.rpc('admin_read_bookings'),
-      ]);
-      if (profRes.error) { setError(profRes.error.message); setDataLoading(false); return; }
-      if (listRes.error) { setError(listRes.error.message); setDataLoading(false); return; }
-      if (bookRes.error) { setError(bookRes.error.message); setDataLoading(false); return; }
-      setProfiles((profRes.data as Profile[]) ?? []);
-      setListings((listRes.data as AdminListing[]) ?? []);
-      setBookings((bookRes.data as AdminBooking[]) ?? []);
+      try {
+        const [profRes, listRes, bookRes] = await Promise.all([
+          adminApi.profiles(),
+          adminApi.listings(),
+          adminApi.bookings(),
+        ]);
+        setProfiles(profRes);
+        setListings(listRes);
+        setBookings(bookRes);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Could not load admin data.');
+      }
       setDataLoading(false);
     })();
   }, [user, profile, loading, navigate]);

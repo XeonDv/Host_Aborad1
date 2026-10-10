@@ -3,7 +3,7 @@ import { GraduationCap, Home as HomeIcon, ArrowRight, ArrowLeft, Mail, Lock, Use
 import { useAuth } from '@/lib/auth';
 import { useRouter } from '@/lib/router';
 import { Button, ErrorBanner, Spinner } from '@/components/ui';
-import type { UserType } from '@/lib/supabase';
+import type { UserType } from '@/lib/types';
 
 export function SignUpPage() {
   const { signUp } = useAuth();
@@ -19,8 +19,8 @@ export function SignUpPage() {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!userType) return;
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters.');
+    if (password.length < 8) {
+      setError('Password must be at least 8 characters.');
       return;
     }
     setLoading(true);
@@ -122,7 +122,7 @@ export function SignUpPage() {
                       type="password"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      placeholder="At least 6 characters"
+                      placeholder="At least 8 characters"
                       className="w-full pl-11 pr-4 py-3 rounded-xl border border-sand-300 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition"
                     />
                   </div>

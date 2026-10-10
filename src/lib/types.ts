@@ -1,18 +1,3 @@
-import { createClient } from '@supabase/supabase-js';
-
-const configuredUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
-const configuredAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
-const url = configuredUrl || 'https://placeholder.supabase.co';
-const anonKey = configuredAnonKey || 'placeholder-anon-key';
-
-export const supabase = createClient(url, anonKey, {
-  auth: {
-    persistSession: true,
-    autoRefreshToken: true,
-    detectSessionInUrl: true,
-  },
-});
-
 export type UserType = 'student' | 'host' | 'admin';
 
 export interface Profile {
@@ -89,3 +74,30 @@ export interface BookingWithDetails extends Booking {
   room: Pick<Room, 'id' | 'title' | 'room_type' | 'beds' | 'price_per_month'> | null;
   student: Pick<Profile, 'id' | 'full_name' | 'avatar_url' | 'country'> | null;
 }
+
+export interface PublicHost extends Pick<Profile, 'id' | 'full_name' | 'avatar_url' | 'city' | 'country' | 'bio'> {}
+
+export interface AdminProfile extends Profile {
+  email: string;
+}
+
+export interface AdminListing extends Listing {
+  host_name: string;
+  host_email: string;
+}
+
+export interface AdminBooking extends Booking {
+  listing_title: string;
+  listing_city: string;
+  student_name: string;
+  student_email: string;
+}
+
+export interface ListingWithCount extends Listing {
+  room_count: number;
+}
+
+export type BookingWithRelations = Booking & {
+  listing: Listing | null;
+  student?: PublicHost | null;
+};

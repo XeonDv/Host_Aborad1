@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   CheckCircle2, CreditCard, Lock, ShieldCheck, Sparkles, Search,
   MessageCircle, Plane, ArrowRight, GraduationCap,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
+import { confirmRegistrationPayment, startRegistrationCheckout } from '@/lib/api';
 import { useRouter } from '@/lib/router';
 import { Button, ErrorBanner, Spinner } from '@/components/ui';
 import { formatCAD } from '@/lib/format';
@@ -24,10 +25,43 @@ const STEPS = [
 ];
 
 export function RegistrationPage() {
-  const { user, profile, updateProfile } = useAuth();
+  const { user, profile, loading, refreshProfile } = useAuth();
   const { navigate } = useRouter();
   const [paying, setPaying] = useState(false);
+  const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Al volver de Stripe confirmamos el pago con el servidor (que lo verifica con Stripe).
+  const userId = user?.id;
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('canceled')) {
+      setError('The payment was canceled. You have not been charged.');
+    }
+    const sessionId = params.get('session_id');
+    if (!sessionId || !userId) return;
+    let active = true;
+    setConfirming(true);
+    confirmRegistrationPayment(sessionId)
+      .then(() => refreshProfile())
+      .catch((err) => {
+        if (active) setError(err instanceof Error ? err.message : 'We could not confirm your payment.');
+      })
+      .finally(() => {
+        if (active) setConfirming(false);
+      });
+    return () => { active = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId]);
+
+  if (loading || confirming) {
+    return (
+      <div className="pt-16 min-h-screen flex flex-col items-center justify-center gap-3 hero-gradient">
+        <Spinner className="w-8 h-8" />
+        {confirming && <p className="text-sm text-sand-600">Confirming your payment...</p>}
+      </div>
+    );
+  }
 
   if (!user || !profile) {
     navigate('/signin');
@@ -49,18 +83,21 @@ export function RegistrationPage() {
   const handlePay = async () => {
     setError(null);
     setPaying(true);
-    // NOTE: Real Stripe Checkout integration will replace this once Stripe is configured.
-    // For now we mark the fee as paid so the student can proceed through the full flow.
-    const { error } = await updateProfile({
-      registration_paid: true,
-      registration_fee_paid_at: new Date().toISOString(),
-    });
-    setPaying(false);
-    if (error) {
-      setError('Something went wrong recording your payment. Please try again.');
-      return;
+    try {
+      const result = await startRegistrationCheckout();
+      if (result.url) {
+        window.location.href = result.url; // Stripe Checkout
+        return;
+      }
+      if (result.alreadyPaid) {
+        await refreshProfile();
+        return;
+      }
+      setError('We could not start the payment. Please try again.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'We could not start the payment. Please try again.');
     }
-    navigate('/listings');
+    setPaying(false);
   };
 
   return (

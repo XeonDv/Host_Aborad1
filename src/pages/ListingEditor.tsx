@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ArrowLeft, Save, Trash2, Plus, X, ImagePlus, BedDouble, ChevronDown, ChevronUp, Home as HomeIcon } from 'lucide-react';
-import { supabase, type Listing, type Room } from '@/lib/supabase';
+import { deleteListing, fetchMyListings, saveListing } from '@/lib/api';
 import { useRouter } from '@/lib/router';
 import { useAuth } from '@/lib/auth';
 import { Button, ErrorBanner, Spinner } from '@/components/ui';
@@ -70,16 +70,23 @@ export function ListingEditor({ listingId }: { listingId?: string }) {
 
   useEffect(() => {
     if (!user) return;
-    if (listingId) {
-      (async () => {
-        const { data, error } = await supabase
-          .from('listings')
-          .select('*')
-          .eq('id', listingId)
-          .maybeSingle();
-        if (error || !data) { setLoading(false); return; }
-        const l = data as Listing;
-        if (l.host_id !== user?.id) {
+    let active = true;
+    (async () => {
+      try {
+        const mine = await fetchMyListings();
+        if (!active) return;
+        const existing = mine.listings[0];
+        if (!listingId) {
+          // Un anfitrión tiene un solo homestay: si ya existe, vamos a editarlo.
+          if (existing) {
+            navigate(`/listings/${existing.id}/edit`);
+            return;
+          }
+          setLoading(false);
+          return;
+        }
+        const l = mine.listings.find((x) => x.id === listingId);
+        if (!l) {
           navigate('/dashboard');
           return;
         }
@@ -91,12 +98,7 @@ export function ListingEditor({ listingId }: { listingId?: string }) {
         setAmenities(l.amenities);
         setPhotoUrls(l.photo_urls.length ? l.photo_urls : [DEFAULT_PHOTOS[0]]);
 
-        const { data: roomData } = await supabase
-          .from('rooms')
-          .select('*')
-          .eq('listing_id', listingId)
-          .order('created_at', { ascending: true });
-        const dbRooms = (roomData as Room[]) ?? [];
+        const dbRooms = mine.rooms.filter((r) => r.listing_id === listingId);
         if (dbRooms.length > 0) {
           setRooms(dbRooms.map((r) => ({
             id: r.id,
@@ -111,22 +113,12 @@ export function ListingEditor({ listingId }: { listingId?: string }) {
             max_stay_months: String(r.max_stay_months),
           })));
         }
-        setLoading(false);
-      })();
-    } else {
-      (async () => {
-        const { data } = await supabase
-          .from('listings')
-          .select('id')
-          .eq('host_id', user.id)
-          .maybeSingle();
-        if (data) {
-          navigate(`/listings/${data.id}/edit`);
-          return;
-        }
-        setLoading(false);
-      })();
-    }
+      } catch (err) {
+        console.error(err);
+      }
+      if (active) setLoading(false);
+    })();
+    return () => { active = false; };
   }, [listingId, user, navigate]);
 
   const toggleAmenity = (a: string) => {
@@ -183,66 +175,33 @@ export function ListingEditor({ listingId }: { listingId?: string }) {
     }
 
     setSaving(true);
-    const listingPayload = {
-      title: title.trim(),
-      description: description.trim(),
-      city,
-      neighbourhood: neighbourhood.trim(),
-      meals_included: mealsIncluded,
-      amenities,
-      photo_urls: photoUrls,
-      price_per_month: Math.min(...validRooms.map((r) => Number(r.price_per_month))),
-      room_type: validRooms[0].room_type,
-      max_stay_months: Math.max(...validRooms.map((r) => Number(r.max_stay_months))),
-    };
-
-    let savedListingId = listingId;
-    if (listingId) {
-      const { error: updErr } = await supabase.from('listings').update(listingPayload).eq('id', listingId);
-      if (updErr) { setError(updErr.message); setSaving(false); return; }
-    } else {
-      const { data, error: insErr } = await supabase
-        .from('listings')
-        .insert({ ...listingPayload, host_id: user!.id })
-        .select('id')
-        .single();
-      if (insErr) { setError(insErr.message); setSaving(false); return; }
-      savedListingId = data.id;
+    try {
+      await saveListing(listingId, {
+        title: title.trim(),
+        description: description.trim(),
+        city,
+        neighbourhood: neighbourhood.trim(),
+        meals_included: mealsIncluded,
+        amenities,
+        photo_urls: photoUrls,
+        rooms: validRooms.map((r) => ({
+          id: r.id,
+          title: r.title.trim(),
+          description: r.description.trim(),
+          room_type: r.room_type,
+          beds: Number(r.beds),
+          price_per_month: Number(r.price_per_month),
+          photo_urls: r.photo_urls,
+          available_from: r.available_from || null,
+          available_to: r.available_to || null,
+          max_stay_months: Number(r.max_stay_months),
+        })),
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not save your homestay.');
+      setSaving(false);
+      return;
     }
-
-    // Save rooms
-    for (const r of validRooms) {
-      const roomPayload = {
-        listing_id: savedListingId,
-        title: r.title.trim(),
-        description: r.description.trim(),
-        room_type: r.room_type,
-        beds: Number(r.beds),
-        price_per_month: Number(r.price_per_month),
-        photo_urls: r.photo_urls,
-        available_from: r.available_from || null,
-        available_to: r.available_to || null,
-        max_stay_months: Number(r.max_stay_months),
-      };
-      if (r.id) {
-        const { error: rErr } = await supabase.from('rooms').update(roomPayload).eq('id', r.id);
-        if (rErr) { setError(rErr.message); setSaving(false); return; }
-      } else {
-        const { error: rErr } = await supabase.from('rooms').insert(roomPayload);
-        if (rErr) { setError(rErr.message); setSaving(false); return; }
-      }
-    }
-
-    // Delete removed rooms
-    if (listingId) {
-      const currentIds = validRooms.filter((r) => r.id).map((r) => r.id!);
-      const { data: allRooms } = await supabase.from('rooms').select('id').eq('listing_id', listingId);
-      const toDelete = ((allRooms as Room[]) ?? []).filter((r) => !currentIds.includes(r.id));
-      for (const r of toDelete) {
-        await supabase.from('rooms').delete().eq('id', r.id);
-      }
-    }
-
     setSaving(false);
     navigate('/dashboard');
   };
@@ -251,9 +210,14 @@ export function ListingEditor({ listingId }: { listingId?: string }) {
     if (!listingId) return;
     if (!confirm('Delete this homestay? All rooms and booking requests will be removed.')) return;
     setSaving(true);
-    const { error } = await supabase.from('listings').delete().eq('id', listingId);
+    try {
+      await deleteListing(listingId);
+    } catch (err) {
+      setSaving(false);
+      setError(err instanceof Error ? err.message : 'Could not delete this homestay.');
+      return;
+    }
     setSaving(false);
-    if (error) { setError(error.message); return; }
     navigate('/dashboard');
   };
 

@@ -1,14 +1,33 @@
 import jwt from 'jsonwebtoken';
 
-const SECRET = process.env.JWT_SECRET || 'hostabroad-dev-secret';
-
-export function signToken(payload: { userId: string; email: string }): string {
-  return jwt.sign(payload, SECRET, { expiresIn: '7d' });
+export interface TokenPayload {
+  userId: string;
+  email: string;
 }
 
-export function verifyToken(token: string): { userId: string; email: string } | null {
+// El secreto es obligatorio: sin él cualquiera podría fabricar sesiones.
+function getSecret(): string {
+  const secret = process.env.JWT_SECRET;
+  if (!secret || secret.length < 32) {
+    throw new Error(
+      'JWT_SECRET no está configurado (mínimo 32 caracteres). Genera uno con: node -e "console.log(require(\'crypto\').randomBytes(48).toString(\'hex\'))"',
+    );
+  }
+  return secret;
+}
+
+export function assertAuthConfigured(): void {
+  getSecret();
+}
+
+export function signToken(payload: TokenPayload): string {
+  return jwt.sign(payload, getSecret(), { expiresIn: '7d' });
+}
+
+export function verifyToken(token: string): TokenPayload | null {
   try {
-    return jwt.verify(token, SECRET) as { userId: string; email: string };
+    const decoded = jwt.verify(token, getSecret()) as TokenPayload;
+    return decoded?.userId ? decoded : null;
   } catch {
     return null;
   }

@@ -9,7 +9,7 @@ import {
   type ApiSession,
   type ApiUser,
 } from '@/lib/api';
-import type { Profile, UserType } from '@/lib/supabase';
+import type { Profile, UserType } from '@/lib/types';
 
 interface AuthContextValue {
   session: ApiSession | null;
